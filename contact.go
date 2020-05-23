@@ -16,7 +16,7 @@ import (
 
 // Contact : Struct for Storing Contacts
 type Contact struct {
-	ID    primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
+	ID    primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Name  string             `json:"name" bson:"name,omitempty"`
 	Phone string             `json:"phone,omitempty" bson:"phone,omitempty"`
 }
