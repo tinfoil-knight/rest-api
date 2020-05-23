@@ -1,18 +1,30 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // Contact : Struct for Storing Contacts
 type Contact struct {
-	Name  string
-	Phone string
+	ID    primitive.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
+	Name  string             `json:"name" bson:"name,omitempty"`
+	Phone string             `json:"phone,omitempty" bson:"phone,omitempty"`
 }
 
 func apiHandler(w http.ResponseWriter, r *http.Request) {
+	collection := getClient()
+	w.Header().Set("Content-Type", "application/json")
+
 	switch r.Method {
 	case "POST":
 		// TODO
@@ -21,9 +33,35 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 	case "DELETE":
 		// TODO
 	default:
-		// TODO for GET
+		filter := bson.D{{}}
+		var results []Contact
+		cur, err := collection.Find(context.TODO(), filter)
+		fmt.Println(cur)
+		checkErr(err)
+		defer cur.Close(context.TODO())
+		for cur.Next(context.TODO()) {
+			var elem Contact
+			err := cur.Decode(&elem)
+			checkErr(err)
+			fmt.Println(elem)
+			results = append(results, elem)
+		}
+
+		if err := cur.Err(); err != nil {
+			log.Fatal(err)
+		}
+
+		json.NewEncoder(w).Encode(results)
 	}
 
+}
+
+// HELPER FUNCTIONS
+
+func checkErr(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
 
 func logRequest(handler http.Handler) http.Handler {
@@ -33,9 +71,24 @@ func logRequest(handler http.Handler) http.Handler {
 	})
 }
 
+func getClient() *mongo.Collection {
+	clientOptions := options.Client().ApplyURI(os.Getenv("MONGODB_URI"))
+	client, err := mongo.Connect(context.TODO(), clientOptions)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	collection := client.Database(os.Getenv("DBNAME")).Collection("contacts")
+	return collection
+}
+
 func main() {
-	httpPort := 8080
+	setVariable()
+	httpPort := os.Getenv("PORT")
+	portString := fmt.Sprintf(":%s", httpPort)
 	http.HandleFunc("/api", apiHandler)
-	fmt.Println("Server starting on http://localhost:8080")
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", httpPort), logRequest(http.DefaultServeMux)))
+
+	fmt.Printf("Server starting on http://localhost:%s\n", httpPort)
+
+	log.Fatal(http.ListenAndServe(portString, logRequest(http.DefaultServeMux)))
 }
