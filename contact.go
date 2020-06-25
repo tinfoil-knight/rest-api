@@ -9,22 +9,23 @@ import (
 	"os"
 
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+var client *mongo.Client
+
 // Contact : Struct for Storing Contacts
 type Contact struct {
-	ID    primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Name  string             `json:"name" bson:"name,omitempty"`
-	Phone string             `json:"phone,omitempty" bson:"phone,omitempty"`
+	// ID    primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	Name  string `json:"name" bson:"name,omitempty"`
+	Phone string `json:"phone,omitempty" bson:"phone,omitempty"`
 }
 
 func apiHandler(w http.ResponseWriter, r *http.Request) {
-	collection := getClient()
-	w.Header().Set("Content-Type", "application/json")
 
+	w.Header().Set("Content-Type", "application/json")
+	collection := client.Database(os.Getenv("DB")).Collection(os.Getenv("COLLECTION"))
 	switch r.Method {
 	case "POST":
 		// TODO
@@ -32,26 +33,34 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 		// TODO
 	case "DELETE":
 		// TODO
-	default:
+	case "GET":
 		filter := bson.D{{}}
-		var results []Contact
+		var results []*Contact
 		cur, err := collection.Find(context.TODO(), filter)
-		fmt.Println(cur)
-		checkErr(err)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`{ "message": "` + err.Error() + `" }`))
+			return
+		}
 		defer cur.Close(context.TODO())
 		for cur.Next(context.TODO()) {
 			var elem Contact
 			err := cur.Decode(&elem)
 			checkErr(err)
-			fmt.Println(elem)
-			results = append(results, elem)
+			results = append(results, &elem)
 		}
 
 		if err := cur.Err(); err != nil {
-			log.Fatal(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`{ "message": "` + err.Error() + `" }`))
+			return
 		}
 
 		json.NewEncoder(w).Encode(results)
+
+	default:
+		fmt.Println("Illegal Method")
+
 	}
 
 }
@@ -71,19 +80,22 @@ func logRequest(handler http.Handler) http.Handler {
 	})
 }
 
-func getClient() *mongo.Collection {
+func getClient() *mongo.Client {
 	clientOptions := options.Client().ApplyURI(os.Getenv("MONGODB_URI"))
-	client, err := mongo.Connect(context.TODO(), clientOptions)
+	defer fmt.Println("Connected to MongoDB!")
+	c, err := mongo.Connect(context.TODO(), clientOptions)
 
 	if err != nil {
 		log.Fatal(err)
 	}
-	collection := client.Database(os.Getenv("DBNAME")).Collection("contacts")
-	return collection
+
+	return c
 }
 
 func main() {
 	setVariable()
+	client = getClient()
+
 	httpPort := os.Getenv("PORT")
 	portString := fmt.Sprintf(":%s", httpPort)
 	http.HandleFunc("/api", apiHandler)

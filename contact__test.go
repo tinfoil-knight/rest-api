@@ -14,7 +14,7 @@ func Test__HTTPStatus(t *testing.T) {
 	res, _ := http.Get(ts.URL)
 
 	if res.StatusCode != http.StatusOK {
-		t.Errorf("Expected StatusCode: 200, Received StatusCode: %v", res.StatusCode)
+		t.Errorf("Expected StatusCode: %v, Received StatusCode: %v", http.StatusOK, res.StatusCode)
 	}
 
 	ts.Close()
