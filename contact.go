@@ -3,12 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
-	"./config"
+	"github.com/go-playground/validator"
+	"github.com/tinfoil-knight/rest-api/config"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -17,69 +19,91 @@ import (
 )
 
 var client *mongo.Client
+var validate *validator.Validate
 
 // Contact : Struct for Storing Contacts
 type Contact struct {
 	ID    primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Name  string             `json:"name" bson:"name,omitempty"`
-	Phone string             `json:"phone,omitempty" bson:"phone,omitempty"`
+	Name  string             `json:"name,omitempty" bson:"name,omitempty" validate:"required,alpha,min=3,max=20"`
+	Phone string             `json:"phone,omitempty" bson:"phone,omitempty" validate:"required,alphanum,len=10"`
 }
 
 // TODO: Change BSON.D to BSON.M as sorting is not required
 func apiHandler(w http.ResponseWriter, r *http.Request) {
+	validate = validator.New()
 	param := r.URL.Path[len("/api/"):]
-	fmt.Println(param)
+
 	w.Header().Set("Content-Type", "application/json")
 	collection := client.Database(os.Getenv("DB")).Collection(os.Getenv("COLLECTION"))
 	switch r.Method {
 	case "POST":
 		var contact Contact
+		// Read Request
 		json.NewDecoder(r.Body).Decode(&contact)
-		result, err := collection.InsertOne(context.TODO(), contact)
-		if err != nil {
-			sendErr(w, err, "Couldn't create a new contact. Please try again.")
+		// Validate Request Data
+		vErr := validate.Struct(contact)
+		if vErr != nil {
+			for _, err := range vErr.(validator.ValidationErrors) {
+				newErr := fmt.Errorf("%v has validation error in %v", err.Namespace(), err.Type())
+				sendErr(w, http.StatusBadRequest, newErr)
+			}
 			return
 		}
+		// Process Request in DB
+		result, err := collection.InsertOne(context.TODO(), contact)
+		if err != nil {
+			sendErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		// Send Response
 		json.NewEncoder(w).Encode(result)
 	case "PUT":
+		var contact Contact
+		// Read Request
+		json.NewDecoder(r.Body).Decode(&contact)
+		// Validate Request Data
+		vErr := validate.Var(contact.Phone, "required,alphanum,len=10")
+		if vErr != nil {
+			sendErr(w, http.StatusBadRequest, vErr)
+			return
+		}
+
 		id, _ := primitive.ObjectIDFromHex(param)
 		filter := bson.M{"_id": id}
-
-		var contact Contact
-		json.NewDecoder(r.Body).Decode(&contact)
-
 		update := bson.D{primitive.E{Key: "$set", Value: bson.D{
 			primitive.E{Key: "phone", Value: contact.Phone},
 		}},
 		}
-
+		// Process Request in DB
 		updateResult, err := collection.UpdateOne(context.TODO(), filter, update)
 		if err != nil {
-			sendErr(w, err, "Changing the record failed. Try again.")
+			sendErr(w, http.StatusInternalServerError, err)
 			return
 		}
+		// Send Response
 		json.NewEncoder(w).Encode(updateResult)
 	case "DELETE":
 		id, _ := primitive.ObjectIDFromHex(param)
 		filter := bson.M{"_id": id}
-
+		// Process Request in DB
 		deleteResult, err := collection.DeleteOne(context.TODO(), filter)
 		if err != nil {
-			sendErr(w, err, "Couldn't delete the record. Try again.")
+			sendErr(w, http.StatusInternalServerError, err)
 			return
 		}
+		// Send Response
 		json.NewEncoder(w).Encode(deleteResult)
 	case "GET":
 		if len(param) == 0 {
 			filter := bson.D{{}}
-			var contacts []*Contact
-
+			// Fetch all documents
 			cur, err := collection.Find(context.TODO(), filter)
 			if err != nil {
-				// TODO: Send appropriate HTTP codes
-				sendErr(w, err, "Couldn't fetch the records. Try again.")
+				sendErr(w, http.StatusInternalServerError, err)
 				return
 			}
+			// Write the documents to a splice of struct Contact
+			var contacts []*Contact
 			defer cur.Close(context.TODO())
 			for cur.Next(context.TODO()) {
 				var contact Contact
@@ -87,42 +111,38 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 				checkErr(err)
 				contacts = append(contacts, &contact)
 			}
-
 			if err := cur.Err(); err != nil {
-				sendErr(w, err, "Couldn't fetch the records. Try again.")
+				sendErr(w, http.StatusInternalServerError, err)
 				return
 			}
-
+			// Send Response
 			json.NewEncoder(w).Encode(contacts)
 		} else {
 			id, _ := primitive.ObjectIDFromHex(param)
 			filter := bson.M{"_id": id}
-
 			var contact Contact
+			// Find document w/ matching id
 			err := collection.FindOne(context.TODO(), filter).Decode(&contact)
 			if err != nil {
-				if err.Error() == "mongo: no documents in result" {
-					sendErr(w, err, "No records match the given parameter.")
-				} else {
-					sendErr(w, err, "Couldn't fetch the records. Retry.")
-				}
+				sendErr(w, http.StatusInternalServerError, err)
 				return
 			}
+			// Send Response
 			json.NewEncoder(w).Encode(contact)
 		}
-
 	default:
-		fmt.Println("Illegal Method")
-
+		err := errors.New("Illegal Method")
+		sendErr(w, http.StatusMethodNotAllowed, err)
+		return
 	}
 
 }
 
 // HELPER FUNCTIONS
-func sendErr(w http.ResponseWriter, err error, message string) {
-	w.WriteHeader(http.StatusInternalServerError)
+func sendErr(w http.ResponseWriter, StatusCode int, err error) {
+	w.WriteHeader(StatusCode)
 	log.Println(err.Error())
-	w.Write([]byte(`{ "error": "` + message + `" }`))
+	w.Write([]byte(`{ "error": "` + err.Error() + `" }`))
 }
 
 func checkErr(err error) {
