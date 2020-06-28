@@ -25,10 +25,11 @@ var validate *validator.Validate
 type Contact struct {
 	ID    primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Name  string             `json:"name,omitempty" bson:"name,omitempty" validate:"required,alpha,min=3,max=20"`
-	Phone string             `json:"phone,omitempty" bson:"phone,omitempty" validate:"required,alphanum,len=10"`
+	Phone string             `json:"phone,omitempty" bson:"phone,omitempty" validate:"required,alphanum,len=10,unique"`
 }
 
-// TODO: Change BSON.D to BSON.M as sorting is not required
+// Check if unique works
+
 func apiHandler(w http.ResponseWriter, r *http.Request) {
 	validate = validator.New()
 	param := r.URL.Path[len("/api/"):]
