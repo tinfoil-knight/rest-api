@@ -1,0 +1,1 @@
+`.gitignore` the `config.yaml` file when using sensitive resources.

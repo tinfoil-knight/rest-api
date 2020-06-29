@@ -1,11 +1,20 @@
 package config
 
-import "os"
+import (
+	"log"
 
-// SetVariable : Sets Environment Variables
-func SetVariable() {
-	os.Setenv("PORT", "8080")
-	os.Setenv("MONGODB_URI", "mongodb://localhost:27017")
-	os.Setenv("DB", "phonebook")
-	os.Setenv("COLLECTION", "contacts")
+	"github.com/spf13/viper"
+)
+
+// Get : Gets config variables from the file
+func Get(key string) string {
+	viper.SetConfigName("config")
+	viper.AddConfigPath(".")
+	err := viper.ReadInConfig()
+
+	if err != nil {
+		log.Fatalf("Error while reading config file %s", err)
+	}
+	value, _ := viper.Get(key).(string)
+	return value
 }

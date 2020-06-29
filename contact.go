@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/go-playground/validator"
 	"github.com/tinfoil-knight/rest-api/config"
@@ -35,7 +34,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 	param := r.URL.Path[len("/api/"):]
 
 	w.Header().Set("Content-Type", "application/json")
-	collection := client.Database(os.Getenv("DB")).Collection(os.Getenv("COLLECTION"))
+	collection := client.Database(config.Get("DB")).Collection(config.Get("COLLECTION"))
 	switch r.Method {
 	case "POST":
 		var contact Contact
@@ -160,10 +159,9 @@ func logRequest(handler http.Handler) http.Handler {
 }
 
 func getClient() *mongo.Client {
-	clientOptions := options.Client().ApplyURI(os.Getenv("MONGODB_URI"))
+	clientOptions := options.Client().ApplyURI(config.Get("MONGODB_URI"))
 	defer fmt.Println("Connected to MongoDB!")
 	c, err := mongo.Connect(context.TODO(), clientOptions)
-
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -172,11 +170,10 @@ func getClient() *mongo.Client {
 }
 
 func main() {
-	config.SetVariable()
-	fmt.Printf("Connecting to %v\n", os.Getenv("MONGODB_URI"))
+	fmt.Printf("Connecting to %v\n", config.Get("MONGODB_URI"))
 	client = getClient()
 
-	httpPort := os.Getenv("PORT")
+	httpPort := config.Get("PORT")
 	portString := fmt.Sprintf(":%s", httpPort)
 	http.HandleFunc("/api/", apiHandler)
 

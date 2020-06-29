@@ -9,9 +9,11 @@ import (
 func runServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(fn))
 }
+
 func Test__HTTPStatus(t *testing.T) {
 	ts := runServer(apiHandler)
-	res, _ := http.Get(ts.URL)
+	url := ts.URL + "/api/"
+	res, _ := http.Get(url)
 
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("Expected StatusCode: %v, Received StatusCode: %v", http.StatusOK, res.StatusCode)
