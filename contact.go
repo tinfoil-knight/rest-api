@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-playground/validator"
 	"github.com/tinfoil-knight/rest-api/config"
@@ -24,7 +25,7 @@ var validate *validator.Validate
 type Contact struct {
 	ID    primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	Name  string             `json:"name,omitempty" bson:"name,omitempty" validate:"required,alpha,min=3,max=20"`
-	Phone string             `json:"phone,omitempty" bson:"phone,omitempty" validate:"required,alphanum,len=10,unique"`
+	Phone string             `json:"phone,omitempty" bson:"phone,omitempty" validate:"required,numeric,len=10"`
 }
 
 // Check if unique works
@@ -56,6 +57,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Send Response
+		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(result)
 	case "PUT":
 		var contact Contact
@@ -153,13 +155,14 @@ func checkErr(err error) {
 
 func logRequest(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s\n", r.Method, r.URL)
+		start := time.Now()
 		handler.ServeHTTP(w, r)
+		log.Printf("%s %s %s\n", r.Method, r.URL, time.Since(start).String())
 	})
 }
 
-func getClient() *mongo.Client {
-	clientOptions := options.Client().ApplyURI(config.Get("MONGODB_URI"))
+func getClient(uri string) *mongo.Client {
+	clientOptions := options.Client().ApplyURI(uri)
 	defer fmt.Println("Connected to MongoDB!")
 	c, err := mongo.Connect(context.TODO(), clientOptions)
 	if err != nil {
@@ -171,8 +174,7 @@ func getClient() *mongo.Client {
 
 func main() {
 	fmt.Printf("Connecting to %v\n", config.Get("MONGODB_URI"))
-	client = getClient()
-
+	client = getClient(config.Get("MONGODB_URI"))
 	httpPort := config.Get("PORT")
 	portString := fmt.Sprintf(":%s", httpPort)
 	http.HandleFunc("/api/", apiHandler)

@@ -18,3 +18,5 @@ func Get(key string) string {
 	value, _ := viper.Get(key).(string)
 	return value
 }
+
+// To check if environement is test: strings.HasSuffix(os.Args[0], ".test")
