@@ -15,6 +15,7 @@ import (
 )
 
 var results []*Contact
+var dbInitialized = false
 
 func runServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(fn))
@@ -27,11 +28,19 @@ func initDB() {
 		log.Fatal(err)
 	}
 	collection := client.Database(config.Get("TESTDB")).Collection(config.Get("COLLECTION"))
-	collection.DeleteMany(context.TODO(), bson.M{})
-	contact1 := Contact{Name: "Jay Randall", Phone: "9087453245"}
-	contact2 := Contact{Name: "Reinne Parsley", Phone: "8904576732"}
-	contacts := []interface{}{contact1, contact2}
-	collection.InsertMany(context.TODO(), contacts)
+
+	// mongo db genereates new IDS everytime its adds new entries
+	// so results[0] contains the ID from the first run initDB() function call
+	// just do this once
+
+	if !dbInitialized {
+		collection.DeleteMany(context.TODO(), bson.M{})
+		contact1 := Contact{Name: "Jay Randall", Phone: "9087453245"}
+		contact2 := Contact{Name: "Reinne Parsley", Phone: "8904576732"}
+		contacts := []interface{}{contact1, contact2}
+		collection.InsertMany(context.TODO(), contacts)
+		dbInitialized = true
+	}
 	cur, _ := collection.Find(context.TODO(), bson.D{{}})
 	for cur.Next(context.TODO()) {
 		var elem Contact
@@ -56,7 +65,7 @@ func Test__GetAll(t *testing.T) {
 		t.Errorf("StatusCode | Expected: %v, Received: %v", http.StatusOK, res.StatusCode)
 	}
 	var contacts *[]Contact
-	json.NewDecoder(res.Body).Decode(contacts)
+	json.NewDecoder(res.Body).Decode(&contacts)
 	log.Println(contacts)
 	res.Body.Close()
 	ts.Close()
@@ -110,11 +119,11 @@ func Test__PostOne(t *testing.T) {
 	ts.Close()
 }
 
-func Test__ChangeOneByID(t *testing.T) {
-	initDB()
+//func Test__ChangeOneByID(t *testing.T) {
+//initDB()
 
-}
+//}
 
-func Test__DeleteOneByID(t *testing.T) {
-	initDB()
-}
+//func Test__DeleteOneByID(t *testing.T) {
+//initDB()
+//}
