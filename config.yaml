@@ -1,5 +1,6 @@
 --- 
 COLLECTION: contacts
 DB: phonebook
+TESTDB: phonebook-test
 MONGODB_URI: "mongodb://localhost:27017"
 PORT: "8080"
