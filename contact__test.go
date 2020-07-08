@@ -51,6 +51,7 @@ func initDB() {
 		log.Fatal(err)
 	}
 	cur.Close(context.TODO())
+	pool = getCacheClient()
 }
 
 func Test__GetAll(t *testing.T) {
