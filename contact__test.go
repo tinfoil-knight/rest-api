@@ -11,10 +11,11 @@ import (
 	"testing"
 
 	"github.com/tinfoil-knight/rest-api/config"
+	"github.com/tinfoil-knight/rest-api/models"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-var results []*Contact
+var results []*models.Contact
 var dbInitialized = false
 
 func runServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
@@ -22,28 +23,27 @@ func runServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest.Server
 }
 
 func initDB() {
-	client = getClient(config.Get("MONGODB_URI"))
+	client = models.GetClient(config.Get("MONGODB_URI"))
 	err := client.Ping(context.TODO(), nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	collection := client.Database(config.Get("TESTDB")).Collection(config.Get("COLLECTION"))
 
-	// mongo db genereates new IDS everytime its adds new entries
+	// mongo db generates new IDS everytime its adds new entries
 	// so results[0] contains the ID from the first run initDB() function call
-	// just do this once
 
 	if !dbInitialized {
 		collection.DeleteMany(context.TODO(), bson.M{})
-		contact1 := Contact{Name: "Jay Randall", Phone: "9087453245"}
-		contact2 := Contact{Name: "Reinne Parsley", Phone: "8904576732"}
+		contact1 := models.Contact{Name: "Jay Randall", Phone: "9087453245"}
+		contact2 := models.Contact{Name: "Reinne Parsley", Phone: "8904576732"}
 		contacts := []interface{}{contact1, contact2}
 		collection.InsertMany(context.TODO(), contacts)
 		dbInitialized = true
 	}
 	cur, _ := collection.Find(context.TODO(), bson.D{{}})
 	for cur.Next(context.TODO()) {
-		var elem Contact
+		var elem models.Contact
 		cur.Decode(&elem)
 		results = append(results, &elem)
 	}
@@ -62,11 +62,10 @@ func Test__GetAll(t *testing.T) {
 		t.Errorf("%s", err)
 	}
 	if res.StatusCode != http.StatusOK {
-		t.Errorf("StatusCode | Expected: %v, Received: %v", http.StatusOK, res.StatusCode)
+		t.Errorf("HTTPStatusCode | Expected: %v, Received: %v", http.StatusOK, res.StatusCode)
 	}
-	var contacts *[]Contact
+	var contacts *[]models.Contact
 	json.NewDecoder(res.Body).Decode(&contacts)
-	log.Println(contacts)
 	res.Body.Close()
 	ts.Close()
 }
@@ -76,7 +75,6 @@ func Test__GetOneByID(t *testing.T) {
 	ts := runServer(apiHandler)
 	contact := results[0]
 	id := (contact.ID).Hex()
-	fmt.Println(id)
 	url := ts.URL + "/api/" + id
 	res, err := http.Get(url)
 	if err != nil {
@@ -85,7 +83,7 @@ func Test__GetOneByID(t *testing.T) {
 	if res.StatusCode != http.StatusOK {
 		t.Errorf("HTTPStatusCode | Expected: %v, Received: %v", http.StatusOK, res.StatusCode)
 	}
-	var resContact Contact
+	var resContact models.Contact
 	json.NewDecoder(res.Body).Decode(&resContact)
 	if contact.Name != resContact.Name {
 		t.Errorf("Field: Name of Contact | Expected: %s, Received: %s", contact.Name, resContact.Name)
@@ -113,7 +111,7 @@ func Test__PostOne(t *testing.T) {
 		t.Errorf("%s", err)
 	}
 	if res.StatusCode != http.StatusCreated {
-		t.Errorf("Expected StatusCode: %v, Received StatusCode: %v", http.StatusCreated, res.StatusCode)
+		t.Errorf("HTTPStatusCode | Expected: %v, Received: %v", http.StatusCreated, res.StatusCode)
 	}
 	res.Body.Close()
 	ts.Close()

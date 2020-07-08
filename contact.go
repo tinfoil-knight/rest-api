@@ -11,24 +11,15 @@ import (
 
 	"github.com/go-playground/validator"
 	"github.com/tinfoil-knight/rest-api/config"
+	"github.com/tinfoil-knight/rest-api/models"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 var client *mongo.Client
 var validate *validator.Validate
-
-// Contact : Struct for Storing Contacts
-type Contact struct {
-	ID    primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	Name  string             `json:"name,omitempty" bson:"name,omitempty" validate:"required,alpha,min=3,max=20"`
-	Phone string             `json:"phone,omitempty" bson:"phone,omitempty" validate:"required,numeric,len=10"`
-}
-
-// Check if unique works
 
 func apiHandler(w http.ResponseWriter, r *http.Request) {
 	validate = validator.New()
@@ -38,7 +29,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 	collection := client.Database(config.Get("DB")).Collection(config.Get("COLLECTION"))
 	switch r.Method {
 	case "POST":
-		var contact Contact
+		var contact models.Contact
 		// Read Request
 		json.NewDecoder(r.Body).Decode(&contact)
 		// Validate Request Data
@@ -60,7 +51,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 		json.NewEncoder(w).Encode(result)
 	case "PUT":
-		var contact Contact
+		var contact models.Contact
 		// Read Request
 		json.NewDecoder(r.Body).Decode(&contact)
 		// Validate Request Data
@@ -105,10 +96,10 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// Write the documents to a splice of struct Contact
-			var contacts []*Contact
+			var contacts []*models.Contact
 			defer cur.Close(context.TODO())
 			for cur.Next(context.TODO()) {
-				var contact Contact
+				var contact models.Contact
 				err := cur.Decode(&contact)
 				checkErr(err)
 				contacts = append(contacts, &contact)
@@ -122,7 +113,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			id, _ := primitive.ObjectIDFromHex(param)
 			filter := bson.M{"_id": id}
-			var contact Contact
+			var contact models.Contact
 			// Find document w/ matching id
 			err := collection.FindOne(context.TODO(), filter).Decode(&contact)
 			if err != nil {
@@ -161,20 +152,9 @@ func logRequest(handler http.Handler) http.Handler {
 	})
 }
 
-func getClient(uri string) *mongo.Client {
-	clientOptions := options.Client().ApplyURI(uri)
-	defer fmt.Println("Connected to MongoDB!")
-	c, err := mongo.Connect(context.TODO(), clientOptions)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return c
-}
-
 func main() {
 	fmt.Printf("Connecting to %v\n", config.Get("MONGODB_URI"))
-	client = getClient(config.Get("MONGODB_URI"))
+	client = models.GetClient(config.Get("MONGODB_URI"))
 	httpPort := config.Get("PORT")
 	portString := fmt.Sprintf(":%s", httpPort)
 	http.HandleFunc("/api/", apiHandler)
