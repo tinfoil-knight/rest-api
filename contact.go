@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-playground/validator"
 	"github.com/tinfoil-knight/rest-api/config"
+	"github.com/tinfoil-knight/rest-api/helpers"
 	"github.com/tinfoil-knight/rest-api/models"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -38,10 +39,12 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 		// Validate Request Data
 		vErr := validate.Struct(contact)
 		if vErr != nil {
+			var errors []string
 			for _, err := range vErr.(validator.ValidationErrors) {
-				newErr := fmt.Errorf("%v has validation error in %v", err.Namespace(), err.Type())
-				sendErr(w, http.StatusBadRequest, newErr)
+				newErr := fmt.Sprintf("%v has validation error in %v", err.Namespace(), err.Type())
+				errors = append(errors, newErr)
 			}
+			sendErr(w, http.StatusBadRequest, fmt.Errorf("%v", errors))
 			return
 		}
 		// Process Request in DB
@@ -80,7 +83,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 			sendErr(w, http.StatusInternalServerError, err)
 			return
 		}
-		// Delete inavlid keys
+		// Delete invalid keys
 		if err := pool.Do(radix.Cmd(nil, "DEL", "ALL", param)); err != nil {
 			log.Println(err)
 		}
@@ -95,7 +98,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 			sendErr(w, http.StatusInternalServerError, err)
 			return
 		}
-		// Delete inavlid keys
+		// Delete invalid keys
 		if deleteResult.DeletedCount > 0 {
 			if err := pool.Do(radix.Cmd(nil, "DEL", "ALL", param)); err != nil {
 				log.Println(err)
@@ -205,8 +208,8 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // HELPER FUNCTIONS
-func sendErr(w http.ResponseWriter, StatusCode int, err error) {
-	w.WriteHeader(StatusCode)
+func sendErr(w http.ResponseWriter, statusCode int, err error) {
+	w.WriteHeader(statusCode)
 	log.Println(err.Error())
 	w.Write([]byte(`{ "error": "` + err.Error() + `" }`))
 }
@@ -221,30 +224,45 @@ func logRequest(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		handler.ServeHTTP(w, r)
-		log.Printf("%s %s %s\n", r.Method, r.URL, time.Since(start).String())
+		log.Printf("%s %s %s\n", r.Method, r.URL, time.Since(start).Round(time.Microsecond).String())
 	})
 }
 
-func getCacheClient() *radix.Pool {
-	defer fmt.Println("Connected to Redis")
-	c, err := radix.NewPool("tcp", "127.0.0.1:6379", 10)
-	if err != nil {
-		log.Printf("%v", err)
-	}
-	// TODO: check ping
-	// TODO: enable auth
-	return c
-}
-
 func main() {
-	fmt.Printf("Connecting to %v\n", config.Get("MONGODB_URI"))
-	client = models.GetClient(config.Get("MONGODB_URI"))
-	pool = getCacheClient()
+	fmt.Printf("INFO: Connecting to %v\n", config.Get("MONGODB_URI"))
+	client = helpers.GetDB(config.Get("MONGODB_URI"))
+	pool = helpers.GetCache()
 	httpPort := config.Get("PORT")
 	portString := fmt.Sprintf(":%s", httpPort)
 	http.HandleFunc("/api/", apiHandler)
 
-	fmt.Printf("Server starting on http://localhost:%s\n", httpPort)
-
+	fmt.Printf("INFO: Server starting on http://localhost:%s/api/\n", httpPort)
 	log.Fatal(http.ListenAndServe(portString, logRequest(http.DefaultServeMux)))
 }
+
+/**
+TODO:
+Add stack trace to error handling.
+Increase test coverage to 80%
+Refactor DB actions if possible.
+Add timeout to server.
+Use http.Error() everywhere.
+Move error handling to helpers package.
+Use a Makefile.
+Log into text files.
+Connect to a slack-bot/telegram-bot and send server error messages. (Separate this things entirely from this module)
+Add monitoring???
+Make all functions in packages isolated and resusable.
+Reduce the number of gloabl variables used.
+Make logs colourful.
+USe contxts properly w/ timeout.
+Create a dockerfile.
+Make this API compliant w/ Swagger.
+Create a separate branch w/ Postgres.
+Make handlers responsible for only writing responses and
+validating stuff and leave the rest over to resusable database methods.
+Add a photo-field and integrate Amaxon Cloudfront or some other CDN(netlify,digital ocean etc.)
+The cache will run out of memory if the database gets too big and all requests are cached.
+See if Redis prevents this automatically or does this needs to be configured manually.
+Expand PUT functionality to change names too.
+**/

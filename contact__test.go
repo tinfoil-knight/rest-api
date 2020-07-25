@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/tinfoil-knight/rest-api/config"
+	"github.com/tinfoil-knight/rest-api/helpers"
 	"github.com/tinfoil-knight/rest-api/models"
 	"go.mongodb.org/mongo-driver/bson"
 )
@@ -18,12 +19,19 @@ import (
 var results []*models.Contact
 var dbInitialized = false
 
+type serverResponse struct {
+	MatchedCount  int8
+	ModifiedCount int8
+	UpsertedCount int8
+	UpsertedID    string
+}
+
 func runServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(fn))
 }
 
 func initDB() {
-	client = models.GetClient(config.Get("MONGODB_URI"))
+	client = helpers.GetDB(config.Get("MONGODB_URI"))
 	err := client.Ping(context.TODO(), nil)
 	if err != nil {
 		log.Fatal(err)
@@ -51,7 +59,8 @@ func initDB() {
 		log.Fatal(err)
 	}
 	cur.Close(context.TODO())
-	pool = getCacheClient()
+	// Cache Client is initiated here temporarily
+	pool = helpers.GetCache()
 }
 
 func Test__GetAll(t *testing.T) {
@@ -117,12 +126,45 @@ func Test__PostOne(t *testing.T) {
 	res.Body.Close()
 	ts.Close()
 }
+func Test__ChangeOneByID(t *testing.T) {
+	initDB()
+	ts := runServer(apiHandler)
+	contact := results[0]
+	id := (contact.ID).Hex()
+	url := ts.URL + "/api/" + id
+	// Test Run
+	client := &http.Client{}
+	reqBody, err := json.Marshal(map[string]string{"phone": "9145636789"})
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(reqBody))
+	if err != nil {
+		t.Errorf("%s", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	res, err := client.Do(req)
+	if err != nil {
+		t.Errorf("%s", err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("HTTPStatusCode | Expected: %v, Received: %v", http.StatusOK, res.StatusCode)
+	}
+	var putResult serverResponse
+	json.NewDecoder(res.Body).Decode(&putResult)
+	if putResult.ModifiedCount != 1 {
+		t.Errorf("ModifiedCount | Expected: %v, Received: %v", 1, putResult.ModifiedCount)
+	}
+	ts.Close()
 
-//func Test__ChangeOneByID(t *testing.T) {
-//initDB()
+}
 
-//}
+func Test__DeleteOneByID(t *testing.T) {
+	initDB()
+}
 
-//func Test__DeleteOneByID(t *testing.T) {
-//initDB()
-//}
+/**
+Test for the following things:
+- Is the Cache Working?
+- Does the server start if the Cache doesn't work?
+- Does the server reject and unresolved request properly?
+- Kind of error is sent when a resource is not found.
+- Does the configuration work properly.
+**/
