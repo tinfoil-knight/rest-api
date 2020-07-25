@@ -23,6 +23,7 @@ type serverResponse struct {
 	MatchedCount  int8
 	ModifiedCount int8
 	UpsertedCount int8
+	DeletedCount  int8
 	UpsertedID    string
 }
 
@@ -158,6 +159,31 @@ func Test__ChangeOneByID(t *testing.T) {
 
 func Test__DeleteOneByID(t *testing.T) {
 	initDB()
+	ts := runServer(apiHandler)
+	contact := results[0]
+	id := (contact.ID).Hex()
+	url := ts.URL + "/api/" + id
+	// Test Run
+	// Test Run
+	client := &http.Client{}
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		t.Errorf("%s", err)
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		t.Errorf("%s", err)
+	}
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("HTTPStatusCode | Expected: %v, Received: %v", http.StatusOK, res.StatusCode)
+	}
+	var delResult serverResponse
+	json.NewDecoder(res.Body).Decode(&delResult)
+	if delResult.DeletedCount != 1 {
+		t.Errorf("ModifiedCount | Expected: %v, Received: %v", 1, delResult.DeletedCount)
+	}
+	ts.Close()
+
 }
 
 /**
