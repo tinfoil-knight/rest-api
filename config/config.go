@@ -1,6 +1,7 @@
 package config
 
 import (
+	"flag"
 	"log"
 	"os"
 	"strings"
@@ -23,4 +24,11 @@ func Get(key string) string {
 	}
 	value, _ := viper.Get(key).(string)
 	return value
+}
+
+// InitFlags : Initialised CMD-line flags
+func InitFlags() *string {
+	mode := flag.String("mode", "DEV", "Application Mode")
+	flag.Parse()
+	return mode
 }

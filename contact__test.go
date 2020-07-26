@@ -32,7 +32,7 @@ func runServer(fn func(w http.ResponseWriter, r *http.Request)) *httptest.Server
 }
 
 func initDB() {
-	client = helpers.GetDB(config.Get("MONGODB_URI"))
+	client = helpers.InitDB(config.Get("MONGODB_URI"))
 	err := client.Ping(context.TODO(), nil)
 	if err != nil {
 		log.Fatal(err)
@@ -61,7 +61,7 @@ func initDB() {
 	}
 	cur.Close(context.TODO())
 	// Cache Client is initiated here temporarily
-	pool = helpers.GetCache()
+	pool = helpers.InitCache()
 }
 
 func Test__GetAll(t *testing.T) {
@@ -115,11 +115,11 @@ func Test__PostOne(t *testing.T) {
 	// Test Run
 	reqBody, err := json.Marshal(map[string]string{"name": "Ryder", "phone": "9022457831"})
 	if err != nil {
-		fmt.Printf("%s", err.Error())
+		fmt.Println(err.Error())
 	}
 	res, err := http.Post(url, "application/json", bytes.NewBuffer(reqBody))
 	if err != nil {
-		t.Errorf("%s", err)
+		t.Errorf("%s\n", err)
 	}
 	if res.StatusCode != http.StatusCreated {
 		t.Errorf("HTTPStatusCode | Expected: %v, Received: %v", http.StatusCreated, res.StatusCode)
@@ -163,7 +163,6 @@ func Test__DeleteOneByID(t *testing.T) {
 	contact := results[0]
 	id := (contact.ID).Hex()
 	url := ts.URL + "/api/" + id
-	// Test Run
 	// Test Run
 	client := &http.Client{}
 	req, err := http.NewRequest(http.MethodDelete, url, nil)

@@ -1,18 +1,23 @@
 package helpers
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/mediocregopher/radix/v3"
 )
 
-// GetCache connects to the Redis instance
-func GetCache() *radix.Pool {
+// InitCache connects to the Redis instance
+func InitCache() *radix.Pool {
 	c, err := radix.NewPool("tcp", "127.0.0.1:6379", 10)
 	if err != nil {
 		log.Printf("%v", err)
 	}
-	// PING the server and recover from  panic
-	// TODO: enable auth
+	fmt.Println("INFO: PINGing Redis")
+	err = c.Do(radix.Cmd(nil, "PING"))
+	if err != nil {
+		log.Printf("%v", err)
+	}
+	fmt.Println("INFO: Connected to Redis")
 	return c
 }

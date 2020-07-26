@@ -18,3 +18,4 @@
 /tmp
 .DS_Store
 rest-api
+config.yaml

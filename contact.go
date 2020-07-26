@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
@@ -229,42 +231,60 @@ func logRequest(handler http.Handler) http.Handler {
 }
 
 func main() {
+	mode := config.InitFlags()
+	fmt.Printf("INFO: Starting application in %s mode\n", *mode)
 	fmt.Printf("INFO: Connecting to %v\n", config.Get("MONGODB_URI"))
-	client = helpers.GetDB(config.Get("MONGODB_URI"))
-	pool = helpers.GetCache()
+	client = helpers.InitDB(config.Get("MONGODB-URI"))
+	pool = helpers.InitCache()
 	httpPort := config.Get("PORT")
 	portString := fmt.Sprintf(":%s", httpPort)
 	http.HandleFunc("/api/", apiHandler)
 
 	fmt.Printf("INFO: Server starting on http://localhost:%s/api/\n", httpPort)
+	if *mode == "PROD" {
+		reqBody, _ := json.Marshal(map[string]string{"text": "Heya"})
+		res, err := http.Post(config.Get("SLACK-HOOK"), "application/json", bytes.NewBuffer(reqBody))
+		if err != nil {
+			log.Println(err)
+		}
+		defer res.Body.Close()
+		body, err := ioutil.ReadAll(res.Body)
+		resString := string(body)
+		if resString != "ok" {
+			fmt.Printf("ERROR: Message not delivered to Slack Workspace")
+		} else {
+			fmt.Printf("INFO: Message has been delivered to Slack Workspace")
+		}
+	}
+
 	log.Fatal(http.ListenAndServe(portString, logRequest(http.DefaultServeMux)))
 }
 
 /**
 TODO:
 Add stack trace to error handling.
+	Log into text files.
 Increase test coverage to 80%
-Refactor DB actions if possible.
+Refactor DB actions.
+	See MongoDB Starter doc to get a hint on what parts to move in db helper methods. Insert Methods on struct Contact.
+	Make handlers responsible for only writing responses and
+	validating stuff and leave the rest over to resusable database methods.
+	Create a separate branch w/ Postgres.
 Add timeout to server.
 Use http.Error() everywhere.
 Move error handling to helpers package.
 Use a Makefile.
-Log into text files.
+
 Connect to a slack-bot/telegram-bot and send server error messages. (Separate this things entirely from this module)
 Add monitoring???
 Make all functions in packages isolated and resusable.
-Reduce the number of gloabl variables used.
+Reduce the number of global variables used.
 Make logs colourful.
-USe contxts properly w/ timeout.
+Use contexts properly w/ timeout.
 Create a dockerfile.
 Make this API compliant w/ Swagger.
-Create a separate branch w/ Postgres.
-Make handlers responsible for only writing responses and
-validating stuff and leave the rest over to resusable database methods.
-Add a photo-field and integrate Amaxon Cloudfront or some other CDN(netlify,digital ocean etc.)
+Add a photo-field and integrate Amazon Cloudfront or some other CDN(netlify,digital ocean etc.)
 The cache will run out of memory if the database gets too big and all requests are cached.
 See if Redis prevents this automatically or does this needs to be configured manually.
 Expand PUT functionality to change names too.
-Add a production build flag.
-See MongoDB Starter doc to get a hint on what parts to move in db helper methods. Insert Methods on struct Contact.
 **/
