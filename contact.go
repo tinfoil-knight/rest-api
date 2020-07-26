@@ -265,4 +265,6 @@ Add a photo-field and integrate Amaxon Cloudfront or some other CDN(netlify,digi
 The cache will run out of memory if the database gets too big and all requests are cached.
 See if Redis prevents this automatically or does this needs to be configured manually.
 Expand PUT functionality to change names too.
+Add a production build flag.
+See MongoDB Starter doc to get a hint on what parts to move in db helper methods. Insert Methods on struct Contact.
 **/
