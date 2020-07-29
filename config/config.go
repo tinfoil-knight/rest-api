@@ -28,7 +28,7 @@ func Get(key string) string {
 
 // InitFlags : Initialised CMD-line flags
 func InitFlags() *string {
-	mode := flag.String("mode", "DEV", "Application Mode")
+	mode := flag.String("mode", "DEV", "set application mode")
 	flag.Parse()
 	return mode
 }

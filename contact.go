@@ -46,13 +46,13 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 				newErr := fmt.Sprintf("%v has validation error in %v", err.Namespace(), err.Type())
 				errors = append(errors, newErr)
 			}
-			sendErr(w, http.StatusBadRequest, fmt.Errorf("%v", errors))
+			http.Error(w, fmt.Sprintf("%v", errors), http.StatusBadRequest)
 			return
 		}
 		// Process Request in DB
 		result, err := collection.InsertOne(context.TODO(), contact)
 		if err != nil {
-			sendErr(w, http.StatusInternalServerError, err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		// Delete inavlid keys
@@ -69,7 +69,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 		// Validate Request Data
 		vErr := validate.Var(contact.Phone, "required,alphanum,len=10")
 		if vErr != nil {
-			sendErr(w, http.StatusBadRequest, vErr)
+			http.Error(w, vErr.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -82,7 +82,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 		// Process Request in DB
 		updateResult, err := collection.UpdateOne(context.TODO(), filter, update)
 		if err != nil {
-			sendErr(w, http.StatusInternalServerError, err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		// Delete invalid keys
@@ -97,7 +97,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 		// Process Request in DB
 		deleteResult, err := collection.DeleteOne(context.TODO(), filter)
 		if err != nil {
-			sendErr(w, http.StatusInternalServerError, err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		// Delete invalid keys
@@ -135,7 +135,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 			// Fetch all documents from DB
 			cur, err := collection.Find(context.TODO(), filter)
 			if err != nil {
-				sendErr(w, http.StatusInternalServerError, err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			// Write the documents to a splice of struct Contact
@@ -143,11 +143,14 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 			for cur.Next(context.TODO()) {
 				var contact models.Contact
 				err := cur.Decode(&contact)
-				checkErr(err)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
 				contacts = append(contacts, &contact)
 			}
 			if err := cur.Err(); err != nil {
-				sendErr(w, http.StatusInternalServerError, err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			// Store Response in Cache
@@ -187,7 +190,7 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 			// Find document w/ matching id
 			err := collection.FindOne(context.TODO(), filter).Decode(&contact)
 			if err != nil {
-				sendErr(w, http.StatusInternalServerError, err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			// Store Response in Cache
@@ -203,23 +206,10 @@ func apiHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	default:
 		err := errors.New("Illegal Method")
-		sendErr(w, http.StatusMethodNotAllowed, err)
+		http.Error(w, err.Error(), http.StatusMethodNotAllowed)
 		return
 	}
 
-}
-
-// HELPER FUNCTIONS
-func sendErr(w http.ResponseWriter, statusCode int, err error) {
-	w.WriteHeader(statusCode)
-	log.Println(err.Error())
-	w.Write([]byte(`{ "error": "` + err.Error() + `" }`))
-}
-
-func checkErr(err error) {
-	if err != nil {
-		panic(err)
-	}
 }
 
 func logRequest(handler http.Handler) http.Handler {
@@ -232,7 +222,7 @@ func logRequest(handler http.Handler) http.Handler {
 
 func main() {
 	mode := config.InitFlags()
-	fmt.Printf("INFO: Starting application in %s mode\n", *mode)
+	fmt.Printf("INFO: Starting application in mode: %s\n", *mode)
 	fmt.Printf("INFO: Connecting to %v\n", config.Get("MONGODB_URI"))
 	client = helpers.InitDB(config.Get("MONGODB-URI"))
 	pool = helpers.InitCache()
@@ -262,29 +252,27 @@ func main() {
 
 /**
 TODO:
-Add stack trace to error handling.
+Logging
+	Add stack trace to error handling.
+	Make logs colourful.
 	Log into text files.
-Increase test coverage to 80%
-Refactor DB actions.
-	See MongoDB Starter doc to get a hint on what parts to move in db helper methods. Insert Methods on struct Contact.
-	Make handlers responsible for only writing responses and
-	validating stuff and leave the rest over to resusable database methods.
-	Create a separate branch w/ Postgres.
-Add timeout to server.
-Use http.Error() everywhere.
-Move error handling to helpers package.
-Use a Makefile.
-
-Connect to a slack-bot/telegram-bot and send server error messages. (Separate this things entirely from this module)
-Add monitoring???
-Make all functions in packages isolated and resusable.
-Reduce the number of global variables used.
-Make logs colourful.
-Use contexts properly w/ timeout.
-Create a dockerfile.
-Make this API compliant w/ Swagger.
-Add a photo-field and integrate Amazon Cloudfront or some other CDN(netlify,digital ocean etc.)
-The cache will run out of memory if the database gets too big and all requests are cached.
-See if Redis prevents this automatically or does this needs to be configured manually.
-Expand PUT functionality to change names too.
+	Add monitoring through an external service.
+	Connect to a slack-bot/telegram-bot and send server error messages.
+Testing, Builds & Docs
+	Make this API compliant w/ Swagger.
+	Increase test coverage to 80%
+	Use a Makefile.
+	Create a dockerfile.
+	Check if Redis is a LRU Cache or not.
+	Fuzzy Testing?
+	Test for Errors using Fault Injection, eg: https://github.com/github/go-fault
+Refactoring
+	Refactor DB code entirely s.t. DB can be changed without editing this file.
+	Make all functions in packages pure.
+	Remove all global variables.
+Core
+	Expand PUT functionality to change names too.
+	Add a photo-field and integrate Amazon Cloudfront or some other CDN(netlify,digital ocean etc.)
+	Use contexts properly w/ timeout.
+	Add timeout to server.
 **/
